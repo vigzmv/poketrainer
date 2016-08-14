@@ -1,0 +1,27 @@
+{% set active_page = 'pokemon' %}
+{% extends "layout.html" %}
+{% block title %}Caught Pokémons{% endblock title %}
+{% block content %}
+<div class="container-">
+  {% for pokemon in pokemons.values() %}
+  <div class="panel panel-default">
+    <div class="panel-heading">
+      <img style="max-height: 50px;" src={{ url_for( 'static', filename="pokemon/%03d.png" % pokemon[0].get('pokemon_id',0)) }}/>
+      {{pokemon[0].get('pokemon_type', "Unknown!")}}
+    </div>
+    <ul class="list-group">
+    {% for unique in pokemon %}
+      <li class="list-group-item">
+        cp: {{unique.get('cp',-1)}}
+      </li>
+    {% endfor %}
+  </ul>
+  </div>
+  {% endfor %}
+</div>
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.min.js"></script>
+<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js" integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS"
+  crossorigin="anonymous"></script>
+<script src="https://cdn.datatables.net/1.10.7/js/jquery.dataTables.min.js"></script>
+
+{% endblock content %}

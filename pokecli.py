@@ -3,6 +3,7 @@
 pgoapi - Pokemon Go API
 Copyright (c) 2016 tjado <https://github.com/tejado>
 Modifications Copyright (c) 2016 j-e-k <https://github.com/j-e-k>
+Modifications Copyright (c) 2016 Brad Smith <https://github.com/infinitewarp>
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -24,106 +25,59 @@ OR OTHER DEALINGS IN THE SOFTWARE.
 
 Author: tjado <https://github.com/tejado>
 Modifications by: j-e-k <https://github.com/j-e-k>
+Modifications by: Brad Smith <https://github.com/infinitewarp>
 """
 
-import os
-import re
-import json
-import struct
-import logging
-import requests
 import argparse
-from time import sleep
-from pgoapi import PGoApi
-from pgoapi.utilities import f2i, h2f
-from pgoapi.location import getNeighbors
+import logging
 
-from google.protobuf.internal import encoder
-from geopy.geocoders import GoogleV3
-from s2sphere import CellId, LatLng
+import gevent
 
-log = logging.getLogger(__name__)
-from threading import Thread
-from Queue import Queue
-def get_pos_by_name(location_name):
-    geolocator = GoogleV3()
-    loc = geolocator.geocode(location_name)
+from helper.colorlogger import create_logger
+from poketrainer.poketrainer import Poketrainer
 
-    log.info('Your given location: %s', loc.address.encode('utf-8'))
-    log.info('lat/long/alt: %s %s %s', loc.latitude, loc.longitude, loc.altitude)
+logger = create_logger(__name__, color='red')
 
-    return (loc.latitude, loc.longitude, loc.altitude)
 
-def init_config():
+def init_arguments():
     parser = argparse.ArgumentParser()
-    config_file = "config.json"
-
-    # If config file exists, load variables from json
-    load = {}
-    if os.path.isfile(config_file):
-        with open(config_file) as data:
-            load.update(json.load(data))
-
     # Read passed in Arguments
-    required = lambda x: not x in load['accounts'][0].keys()
-    parser.add_argument("-i", "--config_index", help="Index of account in config.json", default=0, type=int)
-    parser.add_argument("-l", "--location", help="Location", required=required("location"))
+    parser.add_argument("-i", "--config_index", help="Index of account to start in config.json", default=0, type=int)
+    parser.add_argument("-l", "--location",
+                        help="Location. Only applies if an account was selected through config_index parameter")
+    parser.add_argument("-e", "--encrypt_lib", help="encrypt lib, libencrypt.so/encrypt.dll", default="libencrypt.so")
     parser.add_argument("-d", "--debug", help="Debug Mode", action='store_true', default=False)
-    config = parser.parse_args()
-    load = load['accounts'][config.__dict__['config_index']]
-    # Passed in arguments shoud trump
-    for key,value in load.iteritems():
-        if key not in config.__dict__ or not config.__dict__[key]:
-            config.__dict__[key] = value
-    if config.auth_service not in ['ptc', 'google']:
-      log.error("Invalid Auth service specified! ('ptc' or 'google')")
-      return None
+    arguments = parser.parse_args()
+    return arguments.__dict__
 
-    return config.__dict__
 
 def main():
     # log settings
     # log format
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(module)10s] [%(levelname)5s] %(message)s')
-    # log level for http request class
-    logging.getLogger("requests").setLevel(logging.WARNING)
-    # log level for main pgoapi class
-    logging.getLogger("pgoapi").setLevel(logging.INFO)
-    # log level for internal pgoapi class
-    logging.getLogger("rpc_api").setLevel(logging.INFO)
 
-    config = init_config()
-    if not config:
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(module)10s] [%(levelname)5s] s%(message)s')
+    # log level for http request class
+    create_logger("requests", log_level=logging.WARNING)
+    # log level for pgoapi class
+    create_logger("pgoapi", log_level=logging.WARNING)
+    # log level for internal pgoapi class
+    create_logger("rpc_api", log_level=logging.INFO)
+
+    args = init_arguments()
+    if not args:
         return
 
-    if config["debug"]:
-        logging.getLogger("requests").setLevel(logging.DEBUG)
-        logging.getLogger("pgoapi").setLevel(logging.DEBUG)
-        logging.getLogger("rpc_api").setLevel(logging.DEBUG)
-
-    position = get_pos_by_name(config["location"])
-
-    # instantiate pgoapi
-    pokemon_names = json.load(open("pokemon.en.json"))
-    api = PGoApi(config, pokemon_names)
-
-    # provide player position on the earth
-    api.set_position(*position)
-
-    # retry login every 30 seconds if any errors
-    while not api.login(config["auth_service"], config["username"], config["password"]):
-        log.error('Retrying Login in 30 seconds')
-        sleep(30)
-
-    # main loop
+    poketrainer = Poketrainer(args)
+    # auto-start bot
+    poketrainer.start()
+    # because the bot spawns 'threads' so it can start / stop we're making an infinite lop here
     while True:
         try:
-            api.main_loop()
-        except Exception as e:
-            log.exception('Error in main loop, restarting %s')
-            # restart after sleep
-            sleep(30)
-            main()
+            gevent.sleep(1.0)
+        except KeyboardInterrupt:
+            logger.info('Exiting...')
+            exit(0)
+
 
 if __name__ == '__main__':
     main()
